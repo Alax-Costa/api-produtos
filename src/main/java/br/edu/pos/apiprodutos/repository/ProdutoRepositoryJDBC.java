@@ -24,8 +24,8 @@ public class ProdutoRepositoryJDBC implements ProdutoRepository {
     private void inserir(Produto produto) {
 
         String sql = """
-                INSERT INTO produtos (nome, preco)
-                VALUES (?, ?)
+                INSERT INTO produtos (nome, preco, estoque)
+                VALUES (?, ?, ?)
                 """;
 
         try (
@@ -38,6 +38,7 @@ public class ProdutoRepositoryJDBC implements ProdutoRepository {
 
             comando.setString(1, produto.getNome());
             comando.setDouble(2, produto.getPreco());
+            comando.setInt(3, produto.getEstoque());
 
             comando.executeUpdate();
 
@@ -64,7 +65,7 @@ public class ProdutoRepositoryJDBC implements ProdutoRepository {
 
         String sql = """
                 UPDATE produtos
-                SET nome = ?, preco = ?
+                SET nome = ?, preco = ?,estoque = ?
                 WHERE id = ?
                 """;
 
@@ -75,7 +76,8 @@ public class ProdutoRepositoryJDBC implements ProdutoRepository {
 
             comando.setString(1, produto.getNome());
             comando.setDouble(2, produto.getPreco());
-            comando.setLong(3, produto.getId());
+            comando.setInt(3, produto.getEstoque());
+            comando.setLong(4, produto.getId());
 
             comando.executeUpdate();
 
@@ -92,7 +94,7 @@ public class ProdutoRepositoryJDBC implements ProdutoRepository {
 
         List<Produto> produtos = new ArrayList<>();
 
-        String sql = "SELECT id, nome, preco FROM produtos ORDER BY id";
+        String sql = "SELECT id, nome, preco, estoque FROM produtos ORDER BY id";
 
         try (
                 Connection conexao = Database.conectar();
@@ -118,7 +120,7 @@ public class ProdutoRepositoryJDBC implements ProdutoRepository {
     public Optional<Produto> buscarPorId(Long id) {
 
         String sql = """
-                SELECT id, nome, preco
+                SELECT id, nome, preco, estoque
                 FROM produtos
                 WHERE id = ?
                 """;
@@ -174,7 +176,31 @@ public class ProdutoRepositoryJDBC implements ProdutoRepository {
         return new Produto(
                 resultado.getLong("id"),
                 resultado.getString("nome"),
-                resultado.getDouble("preco")
+                resultado.getDouble("preco"),
+                resultado.getInt("estoque")
         );
+    }
+
+    @Override
+    public List<Produto> listarEstoqueBaixo(int limite) {
+        List<Produto> produtos = new ArrayList<>();
+        String sql = "SELECT id, nome, preco, estoque FROM produtos WHERE estoque <= ? ORDER BY estoque ASC";
+
+        try (Connection conexao = Database.conectar();
+             PreparedStatement comando = conexao.prepareStatement(sql)) {
+
+            comando.setInt(1, limite);
+
+            try (ResultSet resultado = comando.executeQuery()) {
+                while (resultado.next()) {
+                    produtos.add(converterProduto(resultado));
+                }
+            }
+
+        } catch (SQLException erro) {
+            throw new RuntimeException("Erro ao listar produtos com estoque baixo", erro);
+        }
+
+        return produtos;
     }
 }

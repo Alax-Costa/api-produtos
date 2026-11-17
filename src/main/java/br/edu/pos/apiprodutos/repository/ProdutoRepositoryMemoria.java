@@ -36,4 +36,11 @@ public class ProdutoRepositoryMemoria implements ProdutoRepository {
 
         produtos.removeIf(p -> p.getId().equals(id));
     }
+
+    @Override
+    public List<Produto> listarEstoqueBaixo(int limite) {
+        return produtos.stream()
+                .filter(p -> p.getEstoque() <= limite)
+                .toList();
+    }
 }

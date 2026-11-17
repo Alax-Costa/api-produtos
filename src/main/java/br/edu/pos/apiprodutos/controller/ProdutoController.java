@@ -29,7 +29,13 @@ public class ProdutoController {
 
         app.get("/produtos", this::listarProdutos);
 
+        app.get("/produtos/estoque-baixo", this::listarEstoqueBaixo);
+
         app.get("/produtos/{id}", this::buscarProduto);
+
+        app.post("/produtos/{id}/estoque/entrada", this::registrarEntradaEstoque);
+
+        app.post("/produtos/{id}/estoque/saida", this::registrarSaidaEstoque);
 
         app.post("/produtos", this::cadastrarProduto);
 
@@ -47,6 +53,19 @@ public class ProdutoController {
             ctx.status(HttpStatus.BAD_REQUEST);
             ctx.json(new MensagemErro(erro.getMessage()));
         });
+
+        app.exception(RuntimeException.class, (erro, ctx) -> {
+            Throwable causa = erro.getCause();
+
+            if (causa instanceof IllegalArgumentException) {
+                ctx.status(HttpStatus.BAD_REQUEST);
+                ctx.json(new MensagemErro(causa.getMessage()));
+            } else {
+                ctx.status(HttpStatus.INTERNAL_SERVER_ERROR);
+                ctx.json(new MensagemErro(erro.getMessage()));
+            }
+        });
+
     }
 
     @OpenApi(
@@ -91,6 +110,26 @@ public class ProdutoController {
                     @OpenApiResponse(status = "404")
             }
     )
+
+    @OpenApi(
+            path = "/produtos/estoque-baixo",
+            methods = {HttpMethod.GET},
+            summary = "Listar produtos com estoque menor ou igual ao limite",
+            tags = {"Produtos"},
+            queryParams = {
+                    @OpenApiParam(name = "limite", type = Integer.class, description = "Limite máximo de estoque (max: 5)", required = false)
+            },
+            responses = {
+                    @OpenApiResponse(status = "200", content = {@OpenApiContent(from = Produto[].class)})
+            }
+    )
+    public void listarEstoqueBaixo(Context ctx) {
+        String limiteStr = ctx.queryParam("limite");
+        int limite = limiteStr != null ? Integer.parseInt(limiteStr) : 5;
+
+        ctx.json(service.listarEstoqueBaixo(limite));
+    }
+
     public void buscarProduto(Context ctx) {
 
         Long id = Long.parseLong(ctx.pathParam("id"));
@@ -127,7 +166,8 @@ public class ProdutoController {
 
         Produto produto = service.cadastrar(
                 dados.getNome(),
-                dados.getPreco()
+                dados.getPreco(),
+                dados.getEstoque()
         );
 
         ctx.status(HttpStatus.CREATED);
@@ -173,7 +213,8 @@ public class ProdutoController {
         Produto atualizado = service.atualizar(
                 id,
                 dados.getNome(),
-                dados.getPreco()
+                dados.getPreco(),
+                dados.getEstoque()
         );
 
         ctx.json(atualizado);
@@ -207,7 +248,56 @@ public class ProdutoController {
         ctx.status(HttpStatus.NO_CONTENT);
     }
 
-    
+    @OpenApi(
+            path = "/produtos/{id}/estoque/entrada",
+            methods = {HttpMethod.POST},
+            summary = "Somar unidades ao estoque",
+            tags = {"Produtos"},
+            pathParams = {
+                    @OpenApiParam(name = "id", type = Long.class, description = "ID do produto", required = true)
+            },
+            requestBody = @OpenApiRequestBody(
+                    content = {@OpenApiContent(from = MovimentacaoEstoqueRequest.class)}
+            ),
+            responses = {
+                    @OpenApiResponse(status = "200", content = {@OpenApiContent(from = Produto.class)}),
+                    @OpenApiResponse(status = "400"),
+                    @OpenApiResponse(status = "404")
+            }
+    )
+    public void registrarEntradaEstoque(Context ctx) {
+        Long id = Long.parseLong(ctx.pathParam("id"));
+        MovimentacaoEstoqueRequest dados = ctx.bodyAsClass(MovimentacaoEstoqueRequest.class);
+        Produto produtoAtualizado = service.adicionarEstoque(id, dados.quantidade());
+        ctx.json(produtoAtualizado);
+    }
+
+    @OpenApi(
+            path = "/produtos/{id}/estoque/saida",
+            methods = {HttpMethod.POST},
+            summary = "Subtrair unidades do estoque",
+            tags = {"Produtos"},
+            pathParams = {
+                    @OpenApiParam(name = "id", type = Long.class, description = "ID do produto", required = true)
+            },
+            requestBody = @OpenApiRequestBody(
+                    content = {@OpenApiContent(from = MovimentacaoEstoqueRequest.class)}
+            ),
+            responses = {
+                    @OpenApiResponse(status = "200", content = {@OpenApiContent(from = Produto.class)}),
+                    @OpenApiResponse(status = "400"),
+                    @OpenApiResponse(status = "404")
+            }
+    )
+    public void registrarSaidaEstoque(Context ctx) {
+        Long id = Long.parseLong(ctx.pathParam("id"));
+        MovimentacaoEstoqueRequest dados = ctx.bodyAsClass(MovimentacaoEstoqueRequest.class);
+        Produto produtoAtualizado = service.subtrairEstoque(id, dados.quantidade());
+        ctx.json(produtoAtualizado);
+    }
+
+
     public record MensagemErro(String mensagem) {
     }
 }
+record MovimentacaoEstoqueRequest(int quantidade) {}

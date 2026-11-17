@@ -12,5 +12,7 @@ public interface ProdutoRepository {
 
     Optional<Produto> buscarPorId(Long id);
 
+    List<Produto> listarEstoqueBaixo(int limite);
+
     void excluir(Long id);
 }
